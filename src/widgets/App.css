@@ -1,0 +1,346 @@
+/* Settings Container v2 - Two Panel Layout */
+.settings-container-v2 {
+	display: grid;
+	grid-template-columns: 1fr 1.2fr;
+	gap: 24px;
+	padding: 24px;
+	min-height: 400px;
+	background: #0d1117;
+	color: #e6edf3;
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Left Panel - Device Display */
+.device-panel {
+	background: #161b22;
+	border-radius: 12px;
+	padding: 20px;
+	border: 1px solid #30363d;
+}
+
+.panel-header {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 1px;
+	color: #8b949e;
+	margin-bottom: 12px;
+}
+
+.device-name {
+	color: #22c55e;
+	font-size: 14px;
+	font-weight: 500;
+	margin-bottom: 20px;
+}
+
+.gamepad-outline-svg {
+	width: 100%;
+	max-width: 320px;
+	height: auto;
+	margin: 0 auto;
+	display: block;
+}
+
+/* Button highlight animation */
+.button-highlight-pulse {
+	animation: highlightPulse 0.5s ease-out;
+}
+
+@keyframes highlightPulse {
+	0% {
+		r: 5;
+		opacity: 1;
+	}
+
+	100% {
+		opacity: 0.8;
+	}
+}
+
+/* Right Panel - Mappings List */
+.mappings-panel {
+	background: #161b22;
+	border-radius: 12px;
+	padding: 20px;
+	border: 1px solid #30363d;
+	overflow: hidden;
+}
+
+.mappings-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	max-height: 360px;
+	overflow-y: auto;
+}
+
+.mapping-row {
+	display: grid;
+	grid-template-columns: 120px 1fr auto;
+	align-items: center;
+	padding: 10px 14px;
+	background: #21262d;
+	border-radius: 6px;
+	gap: 12px;
+	transition: all 0.15s ease;
+	border: 1px solid transparent;
+}
+
+.mapping-row:hover {
+	background: #30363d;
+}
+
+.mapping-row.highlighted {
+	background: #22c55e20;
+	border-color: #22c55e;
+}
+
+.button-name {
+	font-size: 13px;
+	color: #8b949e;
+	font-weight: 500;
+}
+
+.mapping-value {
+	font-size: 13px;
+	color: #22c55e;
+	font-family: 'SF Mono', Monaco, Consolas, monospace;
+	font-weight: 500;
+}
+
+.map-btn {
+	padding: 6px 14px;
+	background: #30363d;
+	border: 1px solid #484f58;
+	border-radius: 6px;
+	color: #e6edf3;
+	font-size: 12px;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.map-btn:hover {
+	background: #484f58;
+}
+
+/* Mapping Modal */
+.mapping-modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.7);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+	backdrop-filter: blur(4px);
+}
+
+.mapping-modal {
+	background: #161b22;
+	border: 1px solid #30363d;
+	border-radius: 12px;
+	padding: 24px;
+	min-width: 320px;
+	text-align: center;
+}
+
+.mapping-modal h3 {
+	margin: 0 0 8px 0;
+	font-size: 18px;
+	color: #e6edf3;
+}
+
+.mapping-modal p {
+	margin: 0 0 16px 0;
+	font-size: 13px;
+	color: #8b949e;
+}
+
+/* Quick action buttons */
+.quick-actions {
+	display: flex;
+	gap: 10px;
+	margin-bottom: 12px;
+}
+
+.quick-action-btn {
+	flex: 1;
+	padding: 10px 16px;
+	background: #21262d;
+	border: 2px solid #30363d;
+	border-radius: 8px;
+	color: #e6edf3;
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.quick-action-btn:hover {
+	background: #30363d;
+	border-color: #484f58;
+}
+
+.quick-action-btn.selected {
+	border-color: #22c55e;
+	background: #22c55e20;
+	color: #22c55e;
+}
+
+.divider-text {
+	font-size: 12px;
+	color: #484f58;
+	text-align: center;
+	margin-bottom: 12px;
+}
+
+.key-capture-input {
+	width: 100%;
+	padding: 12px 16px;
+	background: #21262d;
+	border: 2px solid #30363d;
+	border-radius: 8px;
+	color: #22c55e;
+	font-family: 'SF Mono', Monaco, Consolas, monospace;
+	font-size: 16px;
+	text-align: center;
+	outline: none;
+	margin-bottom: 20px;
+	box-sizing: border-box;
+}
+
+.key-capture-input:focus {
+	border-color: #22c55e;
+}
+
+.key-capture-input::placeholder {
+	color: #484f58;
+}
+
+.modal-buttons {
+	display: flex;
+	gap: 12px;
+	justify-content: center;
+}
+
+.cancel-btn,
+.save-btn {
+	padding: 10px 24px;
+	border-radius: 8px;
+	font-size: 14px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	border: none;
+}
+
+.cancel-btn {
+	background: #30363d;
+	color: #e6edf3;
+}
+
+.cancel-btn:hover {
+	background: #484f58;
+}
+
+.save-btn {
+	background: #22c55e;
+	color: #0d1117;
+}
+
+.save-btn:hover {
+	background: #16a34a;
+}
+
+.save-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* Scrollbar styling */
+.mappings-list::-webkit-scrollbar {
+	width: 6px;
+}
+
+.mappings-list::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.mappings-list::-webkit-scrollbar-thumb {
+	background: #30363d;
+	border-radius: 3px;
+}
+
+.mappings-list::-webkit-scrollbar-thumb:hover {
+	background: #484f58;
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+	.settings-container-v2 {
+		grid-template-columns: 1fr;
+	}
+
+	.device-panel {
+		order: -1;
+	}
+}
+
+/* Override RemNote's padding on the parent container */
+.rn-queue__top-bar--right {
+	padding: 0 !important;
+}
+
+/* ======== Queue Stats Bar (Motivator) ======== */
+.queue-stats-bar {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 8px 12px;
+	font-size: 14px;
+	font-family: Bookerly, Georgia, 'Times New Roman', serif;
+	white-space: nowrap;
+	color: #e6edf3;
+}
+
+.stat-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.stat-label {
+	font-size: 14px;
+	font-family: Bookerly, Georgia, 'Times New Roman', serif;
+	min-width: 90px;
+}
+
+.stat-value {
+	color: #22c55e;
+	font-weight: 600;
+	font-family: 'SF Mono', Monaco, Consolas, monospace;
+	font-size: 14px;
+}
+
+/* Drag handle for floating widget */
+.drag-handle {
+	color: #484f58;
+	cursor: grab;
+	font-size: 14px;
+	letter-spacing: -3px;
+	padding-right: 8px;
+	border-right: 1px solid #30363d;
+	margin-right: 4px;
+	user-select: none;
+}
+
+.drag-handle:hover {
+	color: #8b949e;
+}
+
+.drag-handle:active {
+	cursor: grabbing;
+}
