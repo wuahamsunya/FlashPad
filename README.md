@@ -14,37 +14,42 @@
 
 ## 📸 Screenshots
 
-### Live Queue Statistics
+### 📊 Live Queue Statistics
 <p align="center">
 	<img src="./assets/queue-stats-demo.png" alt="Queue Stats Demo" width="700">
 </p>
 
-Real-time performance tracking right in the queue toolbar:
-- **🕐 Clock** — Current time
+Track your flashcard performance in real-time:
+- **🕐 Clock** — Current time (AM/PM)
 - **⏱️ Session** — Time spent in queue
-- **⚡ Speed** — Cards per minute (color-coded: green = fast, red = slow)
+- **⚡ Speed** — Cards per minute (green = fast, red = slow)
 - **📊 Score** — Passed / Failed count
 - **🎯 ETA** — Expected completion time
+
+---
+
+### 🎮 Gamepad Controller Settings
+<p align="center">
+	<img src="./assets/gamepad-settings-demo.png" alt="Gamepad Settings Demo" width="700">
+</p>
+
+Customize your controller with the visual settings UI:
+- **Connected Device** — Shows your gamepad with visual outline
+- **Button Mappings** — Assign any action to any button
+- **Keyboard Shortcuts** — Map buttons to key combos (e.g., `Ctrl+B`)
 
 ---
 
 ## ✨ Features
 
 ### 🎮 Gamepad Controller Support
-Connect any game controller and navigate flashcards hands-free!
-
 - **Xbox, PlayStation, Nintendo** — Works with most controllers
 - **Custom Button Mapping** — Assign any action to any button
-- **Keyboard Shortcuts** — Map buttons to key combos (e.g., `Ctrl+I`)
+- **Keyboard Shortcuts** — Map buttons to key combos
 - **Quick Actions** — Scroll Up/Down with dedicated buttons
 
 ### 📊 Live Queue Statistics
 Real-time performance tracking during flashcard review.
-
-### 🖥️ Modern Settings UI
-Beautiful two-panel interface:
-- Visual controller outline with button highlighting
-- Clean mappings list with one-click configuration
 
 ---
 
@@ -82,19 +87,9 @@ This plugin combines and enhances features from:
 
 ---
 
-## 📅 Roadmap
-
-- [ ] Controller profiles for multiple devices
-- [ ] Connected indicator icon
-- [x] ~~Button binding UI~~
-- [x] ~~Live queue statistics~~
-- [x] ~~Keyboard shortcut mapping~~
-
----
-
 ## 🐛 Issues & Feedback
 
-Found a bug? Have an idea? [Open an issue](https://github.com/remnoteio/remnote-gamepad/issues)!
+Found a bug? Have an idea? [Open an issue](https://github.com/wuahamsunya/FlashPad/issues)!
 
 ---
 
