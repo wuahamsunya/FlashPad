@@ -29,6 +29,9 @@ export const QueueInteractionCSSClassName: Record<QueueInteraction, string> = {
 	[QueueInteraction.answerCardAsTooEarly]: 'rn-queue-press-tooltip-skip',
 	[QueueInteraction.hideAnswer]: '',
 	[QueueInteraction.goBackToPreviousCard]: '',
+	[QueueInteraction.scrollUp]: '',
+	[QueueInteraction.scrollDown]: '',
+	[QueueInteraction.exitQueue]: '',
 	[QueueInteraction.answerCardAsViewedAsLeech]: '',
 	[QueueInteraction.resetCard]: '',
 };
@@ -156,14 +159,16 @@ async function onActivate(plugin: ReactRNPlugin) {
 		await plugin.storage.setSession('queueStats_totalAgainCount', 0);
 		await plugin.storage.setSession('queueStats_expectedCompletionTime', '');
 
-		// Fix padding on parent container - replace p-4 with p-0
-		setTimeout(() => {
-			const topBarRight = document.querySelector('.rn-queue__top-bar--right');
-			if (topBarRight) {
-				topBarRight.classList.remove('p-4');
-				topBarRight.classList.add('p-0');
+		// Fix padding and ensure visibility in Expanded Mode (Image Occlusion) using CSS injection
+		// We cannot remove the class 'p-4' directly due to iframe security, so we override it with CSS
+		// We also add z-index to make sure it shows above the IO overlay
+		await plugin.app.registerCSS('fixQueuePadding', `
+			.rn-queue__top-bar--right {
+				padding: 0px !important;
+				z-index: 200 !important;
+				position: relative !important;
 			}
-		}, 100);
+		`);
 	});
 
 	// Track time on reveal
@@ -181,16 +186,24 @@ async function onActivate(plugin: ReactRNPlugin) {
 	plugin.event.addListener(AppEvents.QueueCompleteCard, undefined, async (data) => {
 		const isAgain = (data as any).score === QueueInteractionScore.AGAIN;
 
+		// Always count completed cards
+		totalCardsCompleted++;
+
+		// Also track "Again" cards separately
 		if (isAgain) {
 			totalAgainCount++;
-		} else {
-			totalCardsCompleted++;
 		}
 
 		const totalCardsInDeckRemain = await plugin.queue.getNumRemainingCards();
 
-		// Calculate CPM
-		const cpm = totalTimeSpent > 0
+		// Calculate CPM based on successful (non-Again) cards only for "learning speed"
+		const successfulCards = totalCardsCompleted - totalAgainCount;
+		const successCpm = totalTimeSpent > 0 && successfulCards > 0
+			? parseFloat((successfulCards / (totalTimeSpent / 60)).toFixed(2))
+			: 0;
+
+		// Calculate overall CPM (all reviews including Again) for ETA
+		const overallCpm = totalTimeSpent > 0 && totalCardsCompleted > 0
 			? parseFloat((totalCardsCompleted / (totalTimeSpent / 60)).toFixed(2))
 			: 0;
 
@@ -198,10 +211,12 @@ async function onActivate(plugin: ReactRNPlugin) {
 		let remainingTime = '∞';
 		let expectedCompletionTime = '';
 
-		if (cpm > 0 && totalCardsInDeckRemain !== undefined) {
-			const remainingMinutes = totalCardsInDeckRemain / cpm;
+		if (overallCpm > 0 && totalCardsInDeckRemain !== undefined && totalCardsInDeckRemain > 0) {
+			// Simple approach: remaining cards / cards per minute
+			// This assumes future performance similar to current session
+			const remainingMinutes = totalCardsInDeckRemain / overallCpm;
 
-			if (isFinite(remainingMinutes)) {
+			if (isFinite(remainingMinutes) && remainingMinutes > 0) {
 				const hours = Math.floor(remainingMinutes / 60);
 				const minutes = Math.floor(remainingMinutes % 60);
 				const seconds = Math.floor((remainingMinutes * 60) % 60);
@@ -217,7 +232,7 @@ async function onActivate(plugin: ReactRNPlugin) {
 		}
 
 		// Update session storage
-		await plugin.storage.setSession('queueStats_cardPerMinute', cpm);
+		await plugin.storage.setSession('queueStats_cardPerMinute', successCpm);
 		await plugin.storage.setSession('queueStats_remainingTime', remainingTime);
 		await plugin.storage.setSession('queueStats_totalCardsCompleted', totalCardsCompleted);
 		await plugin.storage.setSession('queueStats_totalTimeSpent', (totalTimeSpent / 60));
@@ -229,6 +244,8 @@ async function onActivate(plugin: ReactRNPlugin) {
 		if (message.message.changeButtonCSS === undefined || message.message.changeButtonCSS === null) {
 			await plugin.app.registerCSS('hoverButton', '');
 		}
+
+
 
 		// 		if (message.message.buttonGroup) {
 		// 			const oldGroup = await plugin.storage.getSession('buttonGroup');

@@ -5,6 +5,9 @@ import { LogType, logMessage } from './logging';
 export enum QueueInteraction {
 	hideAnswer = 'hideAnswer',
 	goBackToPreviousCard = 'goBackToPreviousCard',
+	scrollUp = 'scrollUp',
+	scrollDown = 'scrollDown',
+	exitQueue = 'exitQueue',
 	answerCardAsAgain = QueueInteractionScore.AGAIN,
 	answerCardAsEasy = QueueInteractionScore.EASY,
 	answerCardAsGood = QueueInteractionScore.GOOD,
@@ -17,6 +20,9 @@ export enum QueueInteraction {
 export const QueueInteractionPrettyName: Record<QueueInteraction, string> = {
 	[QueueInteraction.hideAnswer]: 'Hide Answer',
 	[QueueInteraction.goBackToPreviousCard]: 'Go Back To Previous Card',
+	[QueueInteraction.scrollUp]: 'Scroll Up',
+	[QueueInteraction.scrollDown]: 'Scroll Down',
+	[QueueInteraction.exitQueue]: 'Exit Queue',
 	[QueueInteraction.answerCardAsAgain]: 'Answer Card As Again',
 	[QueueInteraction.answerCardAsEasy]: 'Answer Card As Easy',
 	[QueueInteraction.answerCardAsGood]: 'Answer Card As Good',
@@ -41,6 +47,84 @@ export interface ButtonMapping {
 }
 
 export type ControllerMapping = ButtonMapping[];
+
+// Parse vendor and product ID from gamepad.id string
+// Example formats:
+// - "Xbox 360 Controller (Vendor: 045e Product: 028e)"
+// - "045e-028e-Xbox 360 Controller"
+// - "Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)"
+export function parseGamepadId(gamepadId: string): { vendorId: string; productId: string } | null {
+	// Try "Vendor: xxxx Product: xxxx" format
+	const vendorMatch = gamepadId.match(/Vendor:\s*([0-9a-fA-F]+)/i);
+	const productMatch = gamepadId.match(/Product:\s*([0-9a-fA-F]+)/i);
+
+	if (vendorMatch && productMatch) {
+		return { vendorId: vendorMatch[1].toLowerCase(), productId: productMatch[1].toLowerCase() };
+	}
+
+	// Try "xxxx-xxxx-Name" format (common on some systems)
+	const dashMatch = gamepadId.match(/^([0-9a-fA-F]{4})-([0-9a-fA-F]{4})/);
+	if (dashMatch) {
+		return { vendorId: dashMatch[1].toLowerCase(), productId: dashMatch[2].toLowerCase() };
+	}
+
+	return null;
+}
+
+// Generate storage key for device-specific mapping
+export function getDeviceMappingKey(vendorId: string, productId: string): string {
+	return `controllerMapping_${vendorId}_${productId}`;
+}
+
+// Get device-specific mapping from storage, with fallback to legacy global mapping
+export async function getDeviceMapping(
+	plugin: RNPlugin,
+	gamepadId: string | null
+): Promise<{ mapping: ControllerMapping; deviceKey: string | null }> {
+	// Try device-specific mapping first
+	if (gamepadId) {
+		const deviceInfo = parseGamepadId(gamepadId);
+		if (deviceInfo) {
+			const deviceKey = getDeviceMappingKey(deviceInfo.vendorId, deviceInfo.productId);
+			const deviceMapping = (await plugin.storage.getSynced(deviceKey)) as ControllerMapping;
+			if (deviceMapping && Array.isArray(deviceMapping) && deviceMapping.length > 0) {
+				return { mapping: deviceMapping, deviceKey };
+			}
+		}
+	}
+
+	// Fall back to legacy global mapping
+	const legacyMapping = (await plugin.storage.getSynced('controllerMapping')) as ControllerMapping;
+	if (legacyMapping && Array.isArray(legacyMapping) && legacyMapping.length > 0) {
+		return { mapping: legacyMapping, deviceKey: null };
+	}
+
+	// Fall back to default
+	return { mapping: DEFAULT_MAPPING, deviceKey: null };
+}
+
+// Save device-specific mapping to storage
+export async function saveDeviceMapping(
+	plugin: RNPlugin,
+	gamepadId: string | null,
+	mapping: ControllerMapping
+): Promise<string | null> {
+	if (gamepadId) {
+		const deviceInfo = parseGamepadId(gamepadId);
+		if (deviceInfo) {
+			const deviceKey = getDeviceMappingKey(deviceInfo.vendorId, deviceInfo.productId);
+			await plugin.storage.setSynced(deviceKey, mapping);
+			plugin.messaging.broadcast({ type: 'controllerMappingUpdated', deviceKey });
+			return deviceKey;
+		}
+	}
+
+	// Fall back to legacy global key if no device info available
+	await plugin.storage.setSynced('controllerMapping', mapping);
+	plugin.messaging.broadcast({ type: 'controllerMappingUpdated' });
+	return null;
+}
+
 
 // Default Mapping
 export const DEFAULT_MAPPING: ControllerMapping = [
@@ -154,15 +238,33 @@ function logMappingChange(
 
 // Delete or Swap Button Mapping for a Button (pass in the button we want to swap and the new interaction)
 // the function will delete the old mapping for the button and add the new mapping, and if we are asked to swap, it will swap the old mapping's interaction with the new one
+// If gamepadId is provided, saves to device-specific storage key
 export async function deleteOrSwapButtonMapping(
 	plugin: RNPlugin,
 	buttonIndex: number,
 	newQueueInteraction: QueueInteraction,
-	swap: boolean
+	swap: boolean,
+	gamepadId?: string | null
 ) {
-	const controllerMapping = (await plugin.storage.getSynced(
-		'controllerMapping'
-	)) as ControllerMapping;
+	// Get the appropriate storage key and current mapping
+	let storageKey = 'controllerMapping';
+	let controllerMapping: ControllerMapping;
+
+	if (gamepadId) {
+		const deviceInfo = parseGamepadId(gamepadId);
+		if (deviceInfo) {
+			storageKey = getDeviceMappingKey(deviceInfo.vendorId, deviceInfo.productId);
+		}
+	}
+
+	// Try to get existing mapping from the appropriate key
+	const existingMapping = (await plugin.storage.getSynced(storageKey)) as ControllerMapping;
+	if (existingMapping && Array.isArray(existingMapping) && existingMapping.length > 0) {
+		controllerMapping = existingMapping;
+	} else {
+		// Initialize with default mapping if none exists
+		controllerMapping = [...DEFAULT_MAPPING];
+	}
 
 	const oldMapping = controllerMapping.find((mapping) => mapping.buttonIndex === buttonIndex);
 
@@ -202,8 +304,8 @@ export async function deleteOrSwapButtonMapping(
 		}
 	}
 
-	await plugin.storage.setSynced('controllerMapping', controllerMapping);
-	plugin.messaging.broadcast({ type: 'controllerMappingUpdated' });
+	await plugin.storage.setSynced(storageKey, controllerMapping);
+	plugin.messaging.broadcast({ type: 'controllerMappingUpdated', storageKey });
 }
 
 // Write Settings to Synced Mapping

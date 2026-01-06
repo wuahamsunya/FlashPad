@@ -11,6 +11,29 @@ function QueueStatsWidget() {
     const [totalAgainCount] = useSessionStorageState<number>('queueStats_totalAgainCount', 0);
     const [expectedCompletionTime] = useSessionStorageState<string>('queueStats_expectedCompletionTime', '');
     const [currentTime, setCurrentTime] = useState(new Date());
+    const [isEnabled, setIsEnabled] = useState(true);
+
+    // Check if queue stats is enabled (auto-enable on iOS/iPadOS)
+    useEffect(() => {
+        async function checkEnabled() {
+            const ua = navigator.userAgent;
+            const platform = navigator.platform;
+            const isMobile = /iPad|iPhone/.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+            if (isMobile) {
+                // Always enabled on iOS/iPadOS
+                setIsEnabled(true);
+            } else {
+                // Check user preference on desktop
+                const enabled = await plugin.storage.getSynced('queueStatsEnabled');
+                setIsEnabled(enabled !== false);
+            }
+        }
+        checkEnabled();
+        // Also listen for changes
+        const interval = setInterval(checkEnabled, 1000);
+        return () => clearInterval(interval);
+    }, [plugin]);
 
     // Update clock every second
     useEffect(() => {
@@ -19,6 +42,11 @@ function QueueStatsWidget() {
         }, 1000);
         return () => clearInterval(interval);
     }, []);
+
+    // Hide widget if disabled
+    if (!isEnabled) {
+        return null;
+    }
 
     // Calculate session duration
     const getSessionDuration = () => {
@@ -50,11 +78,14 @@ function QueueStatsWidget() {
                 </span>
             </div>
             <div className="stat-item">
-                <span className="stat-label">📊 Score</span>
+                <span className="stat-label">📊 Cards</span>
                 <span className="stat-value">
-                    <span style={{ color: '#22c55e' }}>{totalCardsCompleted - totalAgainCount}</span>
+                    <span style={{ color: '#e6edf3' }}>{totalCardsCompleted}</span>
+                    <span style={{ color: '#6b7280' }}> (</span>
+                    <span style={{ color: '#22c55e' }}>{totalCardsCompleted - totalAgainCount}✓</span>
                     <span style={{ color: '#6b7280' }}>/</span>
-                    <span style={{ color: '#ef4444' }}>{totalAgainCount}</span>
+                    <span style={{ color: '#ef4444' }}>{totalAgainCount}✗</span>
+                    <span style={{ color: '#6b7280' }}>)</span>
                 </span>
             </div>
             <div className="stat-item">
