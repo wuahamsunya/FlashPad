@@ -8,8 +8,8 @@
 	"projectUrl": "https://github.com/wuahamsunya/FlashPad",
 	"version": {
 		"major": 3,
-		"minor": 0,
-		"patch": 10
+		"minor": 1,
+		"patch": 0
 	},
 	"theme": [],
 	"enableOnMobile": true,

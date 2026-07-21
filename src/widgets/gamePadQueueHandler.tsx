@@ -1,7 +1,7 @@
 import { AppEvents, QueueEvent, renderWidget, useAPIEventListener, usePlugin } from '@remnote/plugin-sdk';
 import { useCallback, useEffect, useState } from 'react';
 import type { ControllerMapping } from './funcs/buttonMapping';
-import { QueueInteraction } from './funcs/buttonMapping';
+import { QueueInteraction, getDeviceSettings } from './funcs/buttonMapping';
 import { checkNonCardSlide } from './funcs/checkNonCardSlide';
 import useGamepadInput from './funcs/gamePadInput';
 import { LogType, logMessage } from './funcs/logging';
@@ -10,27 +10,81 @@ function GamepadInput() {
 	const plugin = usePlugin();
 	const [isGamepadEnabled, setIsGamepadEnabled] = useState(true);
 
-	// Check if gamepad is enabled (auto-enable on iOS/iPadOS)
+	// Resolve the enabled state: per-device saved settings win (stateful,
+	// auto-applied the moment that device connects), then the global toggle.
+	// iOS/iPadOS is always enabled.
 	useEffect(() => {
-		async function checkEnabled() {
+		let cancelled = false;
+
+		const getConnectedGamepadId = (): string | null => {
+			const gamepads = navigator.getGamepads?.() || [];
+			for (const gp of gamepads) {
+				if (gp && gp.connected) return gp.id;
+			}
+			return null;
+		};
+
+		async function refreshEnabled() {
 			const ua = navigator.userAgent;
 			const platform = navigator.platform;
 			const isMobile = /iPad|iPhone/.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 			if (isMobile) {
-				// Always enabled on iOS/iPadOS
-				setIsGamepadEnabled(true);
-			} else {
-				// Check user preference on desktop
-				const enabled = await plugin.storage.getSynced('gamepadEnabled');
-				setIsGamepadEnabled(enabled !== false);
+				if (!cancelled) setIsGamepadEnabled(true);
+				return;
 			}
+
+			const gamepadId = getConnectedGamepadId();
+			const deviceSettings = await getDeviceSettings(plugin, gamepadId);
+			if (deviceSettings) {
+				if (!cancelled) setIsGamepadEnabled(deviceSettings.enabled !== false);
+				return;
+			}
+
+			const enabled = await plugin.storage.getSynced('gamepadEnabled');
+			if (!cancelled) setIsGamepadEnabled(enabled !== false);
 		}
-		checkEnabled();
-		// Also listen for changes
-		const interval = setInterval(checkEnabled, 1000);
-		return () => clearInterval(interval);
+
+		refreshEnabled();
+
+		const onGamepadChange = () => refreshEnabled();
+		window.addEventListener('gamepadconnected', onGamepadChange);
+		window.addEventListener('gamepaddisconnected', onGamepadChange);
+
+		// Fallback sync for changes made in other windows/devices
+		const interval = setInterval(refreshEnabled, 5000);
+
+		return () => {
+			cancelled = true;
+			clearInterval(interval);
+			window.removeEventListener('gamepadconnected', onGamepadChange);
+			window.removeEventListener('gamepaddisconnected', onGamepadChange);
+		};
 	}, [plugin]);
+
+	// React instantly to toggle changes from the settings popup
+	useAPIEventListener(AppEvents.MessageBroadcast, undefined, async (message: any) => {
+		const type = message?.message?.type;
+		if (type !== 'featureTogglesUpdated' && type !== 'deviceSettingsUpdated') return;
+
+		const ua = navigator.userAgent;
+		const platform = navigator.platform;
+		const isMobile = /iPad|iPhone/.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+		if (isMobile) {
+			setIsGamepadEnabled(true);
+			return;
+		}
+
+		const gamepads = navigator.getGamepads?.() || [];
+		const connected = gamepads.find((gp) => gp && gp.connected);
+		const deviceSettings = await getDeviceSettings(plugin, connected?.id ?? null);
+		if (deviceSettings) {
+			setIsGamepadEnabled(deviceSettings.enabled !== false);
+			return;
+		}
+		const enabled = await plugin.storage.getSynced('gamepadEnabled');
+		setIsGamepadEnabled(enabled !== false);
+	});
 
 	if (!isGamepadEnabled) {
 		return <div></div>;

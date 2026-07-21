@@ -127,7 +127,7 @@ async function onActivate(plugin: ReactRNPlugin) {
 	});
 
 	await plugin.app.registerWidget('settingsUI', WidgetLocation.Popup, {
-		dimensions: { height: 'auto', width: '80vw' },
+		dimensions: { height: '80vh', width: '80vw' },
 	});
 
 	await plugin.app.registerCommand({

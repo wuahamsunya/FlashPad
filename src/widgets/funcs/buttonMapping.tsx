@@ -76,6 +76,96 @@ export function getDeviceMappingKey(vendorId: string, productId: string): string
 	return `controllerMapping_${vendorId}_${productId}`;
 }
 
+// ======== Per-device settings (stateful, auto-applied on connect) ========
+
+export interface DeviceSettings {
+	enabled: boolean;
+	lastConnected?: number;
+}
+
+export interface KnownDevice {
+	id: string;
+	name: string;
+	vendorId: string;
+	productId: string;
+	lastConnected?: number;
+}
+
+export function getDeviceSettingsKey(vendorId: string, productId: string): string {
+	return `deviceSettings_${vendorId}_${productId}`;
+}
+
+// Read the saved settings for a specific device. Returns null when the device
+// has never been configured (callers fall back to the global toggle).
+export async function getDeviceSettings(
+	plugin: RNPlugin,
+	gamepadId: string | null
+): Promise<DeviceSettings | null> {
+	if (!gamepadId) return null;
+	const parsed = parseGamepadId(gamepadId);
+	if (!parsed) return null;
+	const stored = await plugin.storage.getSynced(
+		getDeviceSettingsKey(parsed.vendorId, parsed.productId)
+	);
+	if (stored && typeof stored === 'object') {
+		return stored as DeviceSettings;
+	}
+	return null;
+}
+
+// Merge-save settings for a specific device and notify all widgets.
+export async function saveDeviceSettings(
+	plugin: RNPlugin,
+	gamepadId: string | null,
+	settings: Partial<DeviceSettings>
+): Promise<string | null> {
+	if (!gamepadId) return null;
+	const parsed = parseGamepadId(gamepadId);
+	if (!parsed) return null;
+	const key = getDeviceSettingsKey(parsed.vendorId, parsed.productId);
+	const existing = (await plugin.storage.getSynced(key)) as DeviceSettings | undefined;
+	const merged: DeviceSettings = { enabled: true, ...(existing ?? {}), ...settings };
+	await plugin.storage.setSynced(key, merged);
+	plugin.messaging.broadcast({ type: 'deviceSettingsUpdated', deviceKey: key });
+	return key;
+}
+
+// Derive a human-friendly name from a raw gamepad id string
+export function getFriendlyDeviceName(gamepadId: string): string {
+	const parsed = parseGamepadId(gamepadId);
+	const cleaned = gamepadId
+		.replace(/\s*\(.*?\)\s*/g, '')
+		.replace(/^[0-9a-f]{4}-[0-9a-f]{4}-/i, '')
+		.trim();
+	if (cleaned) return cleaned;
+	return parsed ? `Device ${parsed.vendorId}:${parsed.productId}` : 'Unknown Device';
+}
+
+// Remember a device in the synced known-devices list (idempotent) and stamp
+// its last-connected time so the settings UI can sort/select it.
+export async function registerKnownDevice(plugin: RNPlugin, gamepadId: string): Promise<void> {
+	const parsed = parseGamepadId(gamepadId);
+	if (!parsed) return;
+	const key = getDeviceMappingKey(parsed.vendorId, parsed.productId);
+	const devices =
+		((await plugin.storage.getSynced('knownGamepadDevices')) as KnownDevice[] | undefined) ?? [];
+	const existing = devices.find((d) => getDeviceMappingKey(d.vendorId, d.productId) === key);
+	if (existing) {
+		existing.lastConnected = Date.now();
+		existing.id = gamepadId;
+	} else {
+		devices.push({
+			id: gamepadId,
+			name: getFriendlyDeviceName(gamepadId),
+			vendorId: parsed.vendorId,
+			productId: parsed.productId,
+			lastConnected: Date.now(),
+		});
+	}
+	await plugin.storage.setSynced('knownGamepadDevices', devices);
+	plugin.messaging.broadcast({ type: 'knownDevicesUpdated' });
+}
+
 // Get device-specific mapping from storage, with fallback to legacy global mapping
 export async function getDeviceMapping(
 	plugin: RNPlugin,

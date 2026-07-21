@@ -1,4 +1,4 @@
-import { renderWidget, usePlugin, useSessionStorageState } from '@remnote/plugin-sdk';
+import { AppEvents, renderWidget, useAPIEventListener, usePlugin, useSessionStorageState } from '@remnote/plugin-sdk';
 import React, { useEffect, useState } from 'react';
 import './App.css';
 
@@ -10,90 +10,99 @@ function QueueStatsWidget() {
     const [totalTimeSpent] = useSessionStorageState<number>('queueStats_totalTimeSpent', 0);
     const [totalAgainCount] = useSessionStorageState<number>('queueStats_totalAgainCount', 0);
     const [expectedCompletionTime] = useSessionStorageState<string>('queueStats_expectedCompletionTime', '');
-    const [currentTime, setCurrentTime] = useState(new Date());
     const [isEnabled, setIsEnabled] = useState(true);
+    // In-review visibility toggle: collapse the card to a small pill without
+    // opening settings. Persisted so it survives sessions.
+    const [isExpanded, setIsExpanded] = useState(true);
 
-    // Check if queue stats is enabled (auto-enable on iOS/iPadOS)
-    useEffect(() => {
-        async function checkEnabled() {
-            const ua = navigator.userAgent;
-            const platform = navigator.platform;
-            const isMobile = /iPad|iPhone/.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    // Resolve the feature toggle (auto-enabled on iOS/iPadOS)
+    const checkEnabled = async () => {
+        const ua = navigator.userAgent;
+        const platform = navigator.platform;
+        const isMobile = /iPad|iPhone/.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-            if (isMobile) {
-                // Always enabled on iOS/iPadOS
-                setIsEnabled(true);
-            } else {
-                // Check user preference on desktop
-                const enabled = await plugin.storage.getSynced('queueStatsEnabled');
-                setIsEnabled(enabled !== false);
-            }
+        if (isMobile) {
+            setIsEnabled(true);
+        } else {
+            const enabled = await plugin.storage.getSynced('queueStatsEnabled');
+            setIsEnabled(enabled !== false);
         }
+    };
+
+    useEffect(() => {
         checkEnabled();
-        // Also listen for changes
-        const interval = setInterval(checkEnabled, 1000);
-        return () => clearInterval(interval);
+        plugin.storage.getSynced('queueStatsExpanded').then((expanded) => {
+            setIsExpanded(expanded !== false);
+        });
     }, [plugin]);
 
-    // Update clock every second
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setCurrentTime(new Date());
-        }, 1000);
-        return () => clearInterval(interval);
-    }, []);
+    // React instantly when the toggle changes in the settings popup
+    useAPIEventListener(AppEvents.MessageBroadcast, undefined, async (message: any) => {
+        if (message?.message?.type === 'featureTogglesUpdated') {
+            checkEnabled();
+        }
+    });
 
-    // Hide widget if disabled
     if (!isEnabled) {
         return null;
     }
 
-    // Calculate session duration
+    const toggleExpanded = async () => {
+        const next = !isExpanded;
+        setIsExpanded(next);
+        await plugin.storage.setSynced('queueStatsExpanded', next);
+    };
+
+    // Collapsed: just a small pill to bring the stats back
+    if (!isExpanded) {
+        return (
+            <button className="qs-fab" onClick={toggleExpanded} title="Show session stats">
+                📊
+            </button>
+        );
+    }
+
     const getSessionDuration = () => {
         const totalSeconds = Math.floor((totalTimeSpent || 0) * 60);
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
         const seconds = totalSeconds % 60;
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        const mmss = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        return hours > 0 ? `${hours}:${mmss}` : mmss;
     };
 
-    // Speed indicator color
-    const speedColor = cardPerMinute < 5 ? '#ef4444' : '#22c55e';
+    const successCount = totalCardsCompleted - totalAgainCount;
+    const accuracy = totalCardsCompleted > 0
+        ? Math.round((successCount / totalCardsCompleted) * 100)
+        : null;
+    const speedColor = cardPerMinute < 5 ? '#f87171' : '#34d399';
     const speedArrow = cardPerMinute < 5 ? '↓' : cardPerMinute > 5 ? '↑' : '';
 
+    // Slim single-row bar: same height as the collapsed pill so the queue
+    // toolbar never grows when stats are shown
     return (
-        <div className="queue-stats-bar">
-            <div className="stat-item">
-                <span className="stat-label">🕐 Clock</span>
-                <span className="stat-value">{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
-            </div>
-            <div className="stat-item">
-                <span className="stat-label">⏱️ Session</span>
-                <span className="stat-value">{getSessionDuration()}</span>
-            </div>
-            <div className="stat-item">
-                <span className="stat-label">⚡ Speed</span>
-                <span className="stat-value" style={{ color: speedColor }}>
-                    {cardPerMinute} c/m {speedArrow}
-                </span>
-            </div>
-            <div className="stat-item">
-                <span className="stat-label">📊 Cards</span>
-                <span className="stat-value">
-                    <span style={{ color: '#e6edf3' }}>{totalCardsCompleted}</span>
-                    <span style={{ color: '#6b7280' }}> (</span>
-                    <span style={{ color: '#22c55e' }}>{totalCardsCompleted - totalAgainCount}✓</span>
-                    <span style={{ color: '#6b7280' }}>/</span>
-                    <span style={{ color: '#ef4444' }}>{totalAgainCount}✗</span>
-                    <span style={{ color: '#6b7280' }}>)</span>
-                </span>
-            </div>
-            <div className="stat-item">
-                <span className="stat-label">🎯 ETA</span>
-                <span className="stat-value">
-                    {expectedCompletionTime || remainingTime}
-                </span>
-            </div>
+        <div className="qs-bar">
+            <label className="qs-switch" title="Hide stats during review">
+                <input type="checkbox" checked={isExpanded} onChange={toggleExpanded} />
+                <span className="qs-switch-slider"></span>
+            </label>
+            <span className="qs-sep" />
+            <span className="qs-item" title="Session duration">⏱️{getSessionDuration()}</span>
+            <span className="qs-sep" />
+            <span className="qs-item" title="Cards per minute" style={{ color: speedColor }}>
+                ⚡{cardPerMinute}{speedArrow}
+            </span>
+            <span className="qs-sep" />
+            <span className="qs-item" title="Cards done · correct/again · accuracy">
+                📊{totalCardsCompleted}
+                <span className="qs-muted">·</span>
+                <span style={{ color: '#34d399' }}>{successCount}✓</span>
+                <span className="qs-muted">/</span>
+                <span style={{ color: '#f87171' }}>{totalAgainCount}✗</span>
+                {accuracy !== null && <span className="qs-muted">·{accuracy}%</span>}
+            </span>
+            <span className="qs-sep" />
+            <span className="qs-item" title="Estimated finish">🎯{(expectedCompletionTime || remainingTime).replace(' ', '')}</span>
         </div>
     );
 }

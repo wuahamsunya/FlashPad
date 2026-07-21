@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { AppEvents, usePlugin } from '@remnote/plugin-sdk';
-import { ControllerMapping, DEFAULT_MAPPING, getDeviceMapping, parseGamepadId } from './buttonMapping';
+import {
+	ControllerMapping,
+	DEFAULT_MAPPING,
+	getDeviceMapping,
+	parseGamepadId,
+	registerKnownDevice,
+} from './buttonMapping';
 import { logMessage, LogType } from './logging';
 
 export interface GamepadDeviceInfo {
@@ -45,8 +51,11 @@ function useGamepadInput() {
 	}, [plugin, currentGamepadId, fetchControllerMapping]);
 
 	useEffect(() => {
+		let pollInterval: ReturnType<typeof setInterval> | null = null;
+
 		const startGamepadInputListener = () => {
-			const interval = setInterval(() => {
+			if (pollInterval) return;
+			pollInterval = setInterval(() => {
 				const gamepads = navigator.getGamepads();
 				const gamepad = gamepads[gamepadIndex.current];
 				if (gamepad) {
@@ -63,22 +72,12 @@ function useGamepadInput() {
 					});
 				}
 			}, 1);
-
-			return () => clearInterval(interval);
 		};
 
-		const handleGamepadConnected = (event: {
-			gamepad: {
-				mapping: string;
-				index: number;
-				id: string;
-			};
-		}) => {
+		const adoptGamepad = (gamepad: { index: number; id: string }) => {
+			gamepadIndex.current = gamepad.index;
 
-			gamepadIndex.current = event.gamepad.index;
-
-			// Parse and store device info
-			const gamepadId = event.gamepad.id;
+			const gamepadId = gamepad.id;
 			setCurrentGamepadId(gamepadId);
 
 			const parsed = parseGamepadId(gamepadId);
@@ -90,10 +89,24 @@ function useGamepadInput() {
 
 			logMessage(plugin, LogType.Info, false, `Gamepad connected: ${gamepadId}`, parsed ? `(Vendor: ${parsed.vendorId}, Product: ${parsed.productId})` : '(Could not parse vendor/product)');
 
+			// Remember this device and stamp last-connected so the settings UI
+			// can auto-select it and its saved state auto-applies
+			registerKnownDevice(plugin, gamepadId);
+
 			// Fetch device-specific mapping
 			fetchControllerMapping(gamepadId);
 
 			startGamepadInputListener();
+		};
+
+		const handleGamepadConnected = (event: {
+			gamepad: {
+				mapping: string;
+				index: number;
+				id: string;
+			};
+		}) => {
+			adoptGamepad(event.gamepad);
 		};
 
 		const handleGamepadDisconnected = () => {
@@ -102,10 +115,18 @@ function useGamepadInput() {
 			gamepadIndex.current = -1;
 		};
 
+		// Adopt a controller that was already connected before this widget mounted
+		// (the browser only fires 'gamepadconnected' once per page)
+		const alreadyConnected = (navigator.getGamepads?.() || []).find((gp) => gp && gp.connected);
+		if (alreadyConnected) {
+			adoptGamepad(alreadyConnected);
+		}
+
 		window.addEventListener('gamepadconnected', handleGamepadConnected);
 		window.addEventListener('gamepaddisconnected', handleGamepadDisconnected);
 
 		return () => {
+			if (pollInterval) clearInterval(pollInterval);
 			window.removeEventListener('gamepadconnected', handleGamepadConnected);
 			window.removeEventListener('gamepaddisconnected', handleGamepadDisconnected);
 		};
